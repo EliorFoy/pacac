@@ -21,6 +21,10 @@ server:
   max_concurrent_downloads: 100
   sequential_downloads: 1     # parallel slots for `chunk_size: 0` rules
   queue_timeout_secs: 15      # wait for a slot before answering 503
+  # Range requests use one connection per chunk (HTTP/1.1) so that upstreams
+  # which throttle per connection can be saturated. Set to true to multiplex
+  # them over HTTP/2 instead (better for upstreams that do not throttle).
+  download_http2: false
 
 cache:
   # dir: "D:/pacac-cache"     # defaults to the platform cache directory

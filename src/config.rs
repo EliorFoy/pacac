@@ -66,6 +66,10 @@ pub struct ServerConfig {
     /// Abort an upstream transfer when no bytes arrive for this long.
     pub read_timeout_secs: u64,
     pub max_idle_per_host: usize,
+    /// Use HTTP/2 for range requests (multiplexed onto one connection).
+    /// Off by default: parallel chunks need one connection each when the
+    /// upstream throttles per connection.
+    pub download_http2: bool,
 }
 
 impl Default for ServerConfig {
@@ -82,6 +86,7 @@ impl Default for ServerConfig {
             head_timeout_secs: DEFAULT_HEAD_TIMEOUT_SECS,
             read_timeout_secs: DEFAULT_READ_TIMEOUT_SECS,
             max_idle_per_host: 50,
+            download_http2: false,
         }
     }
 }

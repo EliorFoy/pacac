@@ -41,6 +41,8 @@ pub struct AppState {
     pub head_client: reqwest::Client,
     /// Never follows redirects; used to read metadata headers on HEAD.
     pub meta_client: reqwest::Client,
+    /// Client used for range requests (HTTP/1.1 unless configured otherwise).
+    pub range_client: reqwest::Client,
     pub download_limit: Arc<Semaphore>,
     pub sequential_limit: Arc<Semaphore>,
     pub active: Arc<Mutex<HashMap<String, Arc<DownloadJob>>>>,
@@ -61,7 +63,7 @@ impl AppState {
             cfg.cache.enabled,
         )?);
 
-        let (client, head_client, meta_client) = build_clients(&cfg)?;
+        let (client, head_client, meta_client, range_client) = build_clients(&cfg)?;
         let download_limit = Arc::new(Semaphore::new(cfg.server.max_concurrent_downloads));
         let sequential_limit = Arc::new(Semaphore::new(cfg.server.sequential_downloads));
 
@@ -79,6 +81,7 @@ impl AppState {
             client,
             head_client,
             meta_client,
+            range_client,
             download_limit,
             sequential_limit,
             active: Arc::new(Mutex::new(HashMap::new())),
@@ -91,7 +94,14 @@ impl AppState {
     }
 }
 
-fn build_clients(cfg: &Config) -> Result<(reqwest::Client, reqwest::Client, reqwest::Client)> {
+fn build_clients(
+    cfg: &Config,
+) -> Result<(
+    reqwest::Client,
+    reqwest::Client,
+    reqwest::Client,
+    reqwest::Client,
+)> {
     let proxy = cfg.server.resolve_proxy();
     if let Some(setting) = &proxy {
         info!(
@@ -142,7 +152,20 @@ fn build_clients(cfg: &Config) -> Result<(reqwest::Client, reqwest::Client, reqw
         .build()
         .context("failed to build the no-redirect HTTP client")?;
 
-    Ok((client, head_client, meta_client))
+    // Range requests are multiplexed by HTTP/2 onto a single TCP connection,
+    // which cancels out the point of parallel chunks when the upstream
+    // throttles per connection. HTTP/1.1 gives every chunk its own connection;
+    // `server.download_http2: true` opts back in for upstreams that do not
+    // throttle (single-connection speed is then higher).
+    let range_client = if cfg.server.download_http2 {
+        base()?
+    } else {
+        base()?.http1_only()
+    }
+    .build()
+    .context("failed to build the range download client")?;
+
+    Ok((client, head_client, meta_client, range_client))
 }
 
 pub fn app(state: Arc<AppState>) -> AxumRouter {
@@ -569,7 +592,7 @@ async fn parallel_dispatch(
         concurrency: rule.concurrency,
         chunk_size: rule.chunk_size,
         headers: auth_headers(headers),
-        client: state.client.clone(),
+        client: state.range_client.clone(),
         cache: state.cache.clone(),
         chunk_ttl_hours: state.cfg.cache.chunk_ttl_hours,
         content_type,

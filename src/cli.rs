@@ -107,6 +107,10 @@ pub struct Cli {
     #[arg(long, value_name = "N", value_parser = parse_count)]
     pub sequential: Option<usize>,
 
+    /// Multiplex range requests over HTTP/2 instead of one connection per chunk
+    #[arg(long)]
+    pub http2: bool,
+
     // ---------------------------------------------------------------- cache
     /// Cache directory
     #[arg(long, value_name = "DIR")]
@@ -170,6 +174,9 @@ impl Cli {
         }
         if let Some(sequential) = self.sequential {
             cfg.server.sequential_downloads = sequential;
+        }
+        if self.http2 {
+            cfg.server.download_http2 = true;
         }
 
         // --- cache ----------------------------------------------------------
