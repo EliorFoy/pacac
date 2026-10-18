@@ -294,6 +294,19 @@ channels:
   - http://127.0.0.1:8081/conda-forge
 ```
 
+### pixi
+
+pixi 0.68 的 `[tool.pixi.pypi-options] index-url` 对 URL 依赖不生效（仍会解析到 PyPI），
+所以直接把 wheel 地址指向 pacac：
+
+```toml
+[pypi-dependencies]
+torch = { url = "http://127.0.0.1:8081/torch-r2/whl/cu126/torch-2.9.1%2Bcu126-cp311-cp311-win_amd64.whl" }
+```
+
+实测（2.4 GB，16 分片）：pixi 走 pacac 持续 **18.7–24.8 MB/s**；直连单连接同 URL 为
+18.2–18.7 MB/s，打平；经按连接限速的代理时 pacac 仍保持 12–16 MB/s，而单连接只有 0.66–7.7 MB/s。
+
 ### npm / maven / 其它
 
 任何 HTTP 源都可以通过 `rules` 接入，例如 GitHub Releases：
