@@ -1,0 +1,154 @@
+# pacac configuration
+#
+# The layout is compatible with the original aimirror / fast_proxy config.yaml,
+# so an existing configuration can be reused unchanged.
+#
+# Paths are resolved relative to this file. `cache.dir` and `logging.file` may
+# be omitted, in which case platform directories are used:
+#   Windows  %LOCALAPPDATA%\pacac\cache
+#   macOS    ~/Library/Caches/pacac
+#   Linux    ~/.cache/pacac
+
+server:
+  # 127.0.0.1 = only this machine. Use "0.0.0.0" or --lan to let other machines
+  # on the LAN use this mirror (pacac has no authentication).
+  host: "127.0.0.1"
+  port: 8081
+  upstream_proxy: ""          # e.g. "http://127.0.0.1:7890"; "system" = OS proxy; empty = direct
+  # How clients reach this server. Defaults to 127.0.0.1:<port>; set it to the
+  # LAN address (e.g. "192.168.1.10:8081") when other machines use this mirror.
+  # public_host: "127.0.0.1:8081"
+  max_concurrent_downloads: 100
+  sequential_downloads: 1     # parallel slots for `chunk_size: 0` rules
+  queue_timeout_secs: 15      # wait for a slot before answering 503
+
+cache:
+  # dir: "D:/pacac-cache"     # defaults to the platform cache directory
+  enabled: true               # false = --no-cache, nothing is stored on disk
+  max_size_gb: 100
+  lru_enabled: true
+  chunk_ttl_hours: 48         # how long an interrupted download stays resumable
+
+# Global response rewriting: any link pointing at one of these hosts is
+# replaced with this proxy's address.
+content_rewrite:
+  content_types:
+    - "text/html"
+    - "application/json"
+    - "application/vnd.pypi.simple"
+  targets:
+    - "https://files.pythonhosted.org"
+    - "https://pypi.org"
+    - "https://download.pytorch.org"
+    - "https://download-r2.pytorch.org"
+    - "https://pypi.nvidia.com"
+
+rules:
+  # ======================= PyPI =======================
+  - name: pypi-simple
+    path_prefix: "/simple"
+    upstream: "https://pypi.org"
+    strategy: proxy
+
+  # .metadata files report a different size on HEAD than on GET, so proxy them.
+  - name: pypi-metadata
+    pattern: '/packages/.+\.metadata$'
+    upstream: "https://files.pythonhosted.org"
+    strategy: proxy
+
+  - name: pypi-packages
+    path_prefix: "/packages"
+    upstream: "https://files.pythonhosted.org"
+    strategy: parallel
+    min_size: 1
+    concurrency: 20
+    chunk_size: 5242880          # 5 MiB
+
+  # ======================= NVIDIA CUDA =======================
+  - name: nvidia-packages
+    path_prefix: "/nvidia"
+    upstream: "https://pypi.nvidia.com"
+    strategy: parallel
+    strip_prefix: true
+    min_size: 1
+    concurrency: 20
+    chunk_size: 10485760         # 10 MiB
+
+  # ======================= PyTorch =======================
+  - name: pytorch-r2
+    path_prefix: "/torch-r2"
+    upstream: "https://download-r2.pytorch.org"
+    strategy: parallel
+    strip_prefix: true
+    min_size: 1
+    concurrency: 20
+    chunk_size: 10485760
+
+  - name: pytorch
+    path_prefix: "/torch"
+    upstream: "https://download.pytorch.org"
+    strategy: parallel
+    strip_prefix: true
+    min_size: 1
+    concurrency: 20
+    chunk_size: 10485760
+
+  # ======================= Docker Registry =======================
+  # `chunk_size: 0` = auto mode: the file is split into `concurrency - 10`
+  # equal parts, which keeps multi-GB layers to a handful of requests so the
+  # registry token does not expire mid-download.
+  - name: docker-blob
+    pattern: "/v2/.*/blobs/sha256:[a-f0-9]+"
+    upstream: "https://registry-1.docker.io"
+    strategy: parallel
+    min_size: 1
+    concurrency: 20
+    chunk_size: 0
+
+  - name: docker-registry
+    pattern: "/v2/.*"
+    upstream: "https://registry-1.docker.io"
+    strategy: proxy
+    handler: handlers.docker
+
+  # ======================= R / CRAN =======================
+  - name: r-package
+    path_prefix: "/src/contrib"
+    upstream: "https://cran.r-project.org"
+    strategy: parallel
+    min_size: 102400
+    concurrency: 20
+    chunk_size: 5242880
+
+  # ======================= HuggingFace =======================
+  - name: huggingface-files
+    pattern: '/.*/(blob|resolve)/[^/]+/.+'
+    upstream: "https://huggingface.co"
+    strategy: parallel
+    min_size: 102400
+    concurrency: 20
+    chunk_size: 10485760
+    cache_key_source: original
+    path_rewrite:
+      - search: "/blob/"
+        replace: "/resolve/"
+    head_meta_headers:
+      - "x-repo-commit"
+      - "x-linked-etag"
+      - "x-linked-size"
+      - "etag"
+
+  - name: huggingface-api
+    pattern: '/api/models/.*'
+    upstream: "https://huggingface.co"
+    strategy: proxy
+
+  # ======================= Catch-all =======================
+  - name: default
+    path_prefix: "/"
+    upstream: "https://pypi.org"
+    strategy: proxy
+
+logging:
+  level: "info"
+  # file: "logs/pacac.log"

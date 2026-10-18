@@ -1,0 +1,60 @@
+[package]
+name = "pacac"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.82"
+description = "Package Accelerator & Cache - parallel ranged download mirror for PyPI, Docker Hub, HuggingFace, CRAN and any HTTP source"
+license = "MIT"
+readme = "README.md"
+keywords = ["proxy", "mirror", "download", "pypi", "docker"]
+categories = ["network-programming", "command-line-utilities"]
+
+[[bin]]
+name = "pacac"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = "1"
+axum = { version = "0.8", features = ["http1", "tokio", "macros"] }
+bytes = "1"
+chrono = { version = "0.4", default-features = false, features = ["clock"] }
+clap = { version = "4", features = ["derive", "env"] }
+dirs = "6"
+futures-util = "0.3"
+hex = "0.4"
+regex = "1"
+reqwest = { version = "0.12", default-features = false, features = [
+    "rustls-tls-native-roots",
+    "stream",
+    "gzip",
+    "brotli",
+    "deflate",
+    "json",
+    "http2",
+    "socks",
+] }
+rusqlite = { version = "0.32", features = ["bundled"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+serde_yaml = "0.9"
+sha2 = "0.10"
+time = { version = "0.3", features = ["formatting", "parsing", "macros"] }
+tokio = { version = "1", features = ["full"] }
+tokio-util = { version = "0.7", features = ["io"] }
+tracing = "0.1"
+tracing-appender = "0.2"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt", "time", "chrono"] }
+url = "2"
+
+[target.'cfg(windows)'.dependencies]
+winreg = "0.52"
+
+[dev-dependencies]
+tempfile = "3"
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = true
+
+
