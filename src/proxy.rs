@@ -228,9 +228,20 @@ pub fn rewrite_body(data: Vec<u8>, cfg: &Config) -> Bytes {
     let base = format!("http://{}", cfg.server.public_host());
     let mut text = text;
     for target in &rewrite.targets {
-        if !target.is_empty() && text.contains(target.as_str()) {
-            text = text.replace(target.as_str(), &base);
+        let host = target.host();
+        if host.is_empty() || !text.contains(host) {
+            continue;
         }
+        // Mirrors mounted under a path prefix need it back in the rewritten URL.
+        let prefix = target.prefix();
+        let replacement = if prefix.is_empty() {
+            base.clone()
+        } else if prefix.starts_with('/') {
+            format!("{base}{prefix}")
+        } else {
+            format!("{base}/{prefix}")
+        };
+        text = text.replace(host, &replacement);
     }
 
     Bytes::from(text.into_bytes())
@@ -295,6 +306,10 @@ mod tests {
             targets: vec![
                 "https://files.pythonhosted.org".into(),
                 "https://pypi.org".into(),
+                crate::config::RewriteTarget::Prefixed {
+                    host: "https://download-r2.pytorch.org".into(),
+                    prefix: Some("/torch-r2".into()),
+                },
             ],
         });
         cfg
@@ -308,6 +323,18 @@ mod tests {
         let text = std::str::from_utf8(&out).unwrap();
         assert!(text.contains("http://127.0.0.1:8081/packages/x.whl"));
         assert!(!text.contains("files.pythonhosted.org"));
+    }
+
+    #[test]
+    fn prefixed_targets_keep_their_prefix() {
+        let cfg = config();
+        let input =
+            br#"<a href="https://download-r2.pytorch.org/whl/cu126/torch.whl">t</a>"#.to_vec();
+        let text = String::from_utf8(rewrite_body(input, &cfg).to_vec()).unwrap();
+        assert_eq!(
+            text,
+            r#"<a href="http://127.0.0.1:8081/torch-r2/whl/cu126/torch.whl">t</a>"#
+        );
     }
 
     #[test]

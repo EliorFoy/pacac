@@ -43,9 +43,14 @@ content_rewrite:
   targets:
     - "https://files.pythonhosted.org"
     - "https://pypi.org"
-    - "https://download.pytorch.org"
-    - "https://download-r2.pytorch.org"
-    - "https://pypi.nvidia.com"
+    # Mirrors below are mounted under a path prefix, so the prefix must come
+    # back in the rewritten URL or the link would miss its rule.
+    - host: "https://download.pytorch.org"
+      prefix: "/torch"
+    - host: "https://download-r2.pytorch.org"
+      prefix: "/torch-r2"
+    - host: "https://pypi.nvidia.com"
+      prefix: "/nvidia"
 
 rules:
   # ======================= PyPI =======================

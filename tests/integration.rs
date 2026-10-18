@@ -288,7 +288,7 @@ fn test_config(upstream: &str, addr: &SocketAddr, cache_dir: PathBuf) -> Config 
     cfg.content_rewrite = Some(ContentRewrite {
         content_types: vec!["text/html".into(), "application/json".into()],
         targets: vec![
-            upstream.to_string(),
+            upstream.into(),
             "https://files.pythonhosted.org".into(),
             "https://pypi.org".into(),
         ],

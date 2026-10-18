@@ -154,7 +154,53 @@ pub struct ContentRewrite {
     #[serde(default)]
     pub content_types: Vec<String>,
     #[serde(default)]
-    pub targets: Vec<String>,
+    pub targets: Vec<RewriteTarget>,
+}
+
+/// A host whose links are rewritten to point at this proxy.
+///
+/// Plain strings are the common case. Mirrors that live under a path prefix
+/// (`/torch-r2`, `/nvidia`) need the prefix too, otherwise the rewritten link
+/// would miss the rule that routes it back to the right upstream:
+///
+/// ```yaml
+/// targets:
+///   - "https://files.pythonhosted.org"
+///   - host: "https://download-r2.pytorch.org"
+///     prefix: "/torch-r2"
+/// ```
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(untagged)]
+pub enum RewriteTarget {
+    Host(String),
+    Prefixed {
+        host: String,
+        #[serde(default)]
+        prefix: Option<String>,
+    },
+}
+
+impl RewriteTarget {
+    pub fn host(&self) -> &str {
+        match self {
+            RewriteTarget::Host(host) => host,
+            RewriteTarget::Prefixed { host, .. } => host,
+        }
+    }
+
+    /// Proxy path prefix (empty when the mirror is mounted at the root).
+    pub fn prefix(&self) -> &str {
+        match self {
+            RewriteTarget::Host(_) => "",
+            RewriteTarget::Prefixed { prefix, .. } => prefix.as_deref().unwrap_or(""),
+        }
+    }
+}
+
+impl From<&str> for RewriteTarget {
+    fn from(host: &str) -> Self {
+        RewriteTarget::Host(host.to_string())
+    }
 }
 
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
